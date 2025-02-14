@@ -14,8 +14,8 @@ class GameScreen extends StatefulWidget {
 class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   // Constants
   static const double groundHeight = 100;
-  static const double gravity = 1.5;
-  static const double jumpForce = -20.0;
+  static const double gravity = -1.5;
+  static const double jumpForce = 25.0;
   static const double marioSize = 60.0;
 
   // Game state
@@ -105,7 +105,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       marioY += verticalVelocity;
 
       // Ground collision
-      if (marioY >= 0) {
+      if (marioY <= 0) {
         marioY = 0;
         verticalVelocity = 0;
         isJumping = false;
