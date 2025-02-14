@@ -141,49 +141,45 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       body: GestureDetector(
         onTapDown: (_) => jump(),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.lightBlue, Colors.white],
+              colors: [
+                Colors.lightBlue.shade300,
+                Colors.lightBlue.shade100,
+              ],
+              stops: const [0.0, 0.7],
             ),
           ),
           child: Stack(
             children: [
+              // Clouds (Parallax Background)
+              _buildClouds(),
+
+              // Mountains (Background)
+              _buildMountains(),
+
               // Ground
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: Container(
-                  height: 100,
-                  color: Colors.brown[200],
-                ),
+                child: _buildGround(),
               ),
 
-              // Mario
+              // Mario Character
               Positioned(
                 left: marioXPosition,
                 bottom: 100 + marioYPosition,
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                ),
+                child: _buildMario(),
               ),
 
               // Obstacles
               ...obstacles.map((obstacle) => Positioned(
                 left: obstacle.x,
                 bottom: 100,
-                child: Container(
-                  width: obstacle.width,
-                  height: obstacle.height,
-                  color: Colors.green,
-                ),
+                child: _buildObstacle(obstacle),
               )),
 
               // Score Display
@@ -195,10 +191,172 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  @override
-  void dispose() {
-    gameTimer?.cancel();
-    _marioAnimationController.dispose();
-    super.dispose();
+  Widget _buildClouds() {
+    return Positioned(
+      top: 50,
+      left: 0,
+      right: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: List.generate(
+          3,
+              (index) => Container(
+            width: 80,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
+
+  Widget _buildMountains() {
+    return Positioned(
+      bottom: 100,
+      left: 0,
+      right: 0,
+      child: CustomPaint(
+        size: const Size(double.infinity, 100),
+        painter: MountainPainter(),
+      ),
+    );
+  }
+
+  Widget _buildGround() {
+    return Container(
+      height: 100,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.brown.shade400,
+            Colors.brown.shade700,
+          ],
+        ),
+        border: Border(
+          top: BorderSide(
+            color: Colors.brown.shade600,
+            width: 3,
+          ),
+        ),
+      ),
+      child: CustomPaint(
+        size: const Size(double.infinity, 100),
+        painter: GroundPatternPainter(),
+      ),
+    );
+  }
+
+  Widget _buildMario() {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.circular(5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.red, Color(0xFFCC0000)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildObstacle(GameObject obstacle) {
+    return Container(
+      width: obstacle.width,
+      height: obstacle.height,
+      decoration: BoxDecoration(
+        color: Colors.green.shade800,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(5),
+          topRight: Radius.circular(5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.green.shade400,
+            Colors.green.shade800,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Custom Painter for Mountains
+class MountainPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.shade600
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height);
+
+    // First mountain
+    path.lineTo(size.width * 0.3, 0);
+    path.lineTo(size.width * 0.6, size.height);
+
+    // Second mountain
+    path.lineTo(size.width * 0.8, size.height * 0.3);
+    path.lineTo(size.width, size.height);
+
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Custom Painter for Ground Pattern
+class GroundPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.brown.shade300.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    for (var i = 0; i < size.width; i += 20) {
+      canvas.drawLine(
+        Offset(i.toDouble(), 0),
+        Offset(i.toDouble(), size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+
 }

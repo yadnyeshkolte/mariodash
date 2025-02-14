@@ -14,17 +14,41 @@ class ScoreDisplay extends StatelessWidget {
       top: 20,
       right: 20,
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          'Score: $score',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+          border: Border.all(
+            color: Colors.orange.shade300,
+            width: 3,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.star,
+              color: Colors.orange.shade400,
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              score.toString().padLeft(6, '0'),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange.shade800,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
         ),
       ),
     );
