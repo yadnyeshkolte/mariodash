@@ -12,63 +12,86 @@ class GameScreen extends StatefulWidget {
 }
 
 class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
-  late AnimationController _marioAnimationController;
-  late Animation<double> _marioAnimation;
+  // Constants
+  static const double groundHeight = 100;
+  static const double gravity = 1.5;
+  static const double jumpForce = -20.0;
+  static const double marioSize = 60.0;
 
-  double marioYPosition = 0;
-  double marioXPosition = 50;
+  // Game state
+  double marioY = 0;
+  double marioX = 50;
+  double verticalVelocity = 0;
   bool isJumping = false;
   bool isGameOver = false;
   int score = 0;
   List<GameObject> obstacles = [];
   Timer? gameTimer;
+  Timer? animationTimer;
   double gameSpeed = 5.0;
 
+  // Animation state
+  int currentFrame = 0;
+  bool isAnimating = false;
+
+  // Placeholder for images until actual assets are added
+  Widget getMarioSprite() {
+    return Image.asset(
+      isJumping ? 'assets/images/mario_jump.png' : 'assets/images/mario_run${currentFrame + 1}.png',
+      width: marioSize,
+      height: marioSize,
+    );
+  }
+
+  Widget getObstacleSprite(GameObject obstacle) {
+    return Image.asset(
+      'assets/images/pipe.png',
+      width: obstacle.width,
+      height: obstacle.height,
+    );
+  }
   @override
   void initState() {
     super.initState();
-    setupMarioAnimation();
-    startGame();
+    setupGame();
+    startAnimation();
   }
 
-  void setupMarioAnimation() {
-    _marioAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
+  void setupGame() {
+    setState(() {
+      marioY = 0;
+      score = 0;
+      isGameOver = false;
+      gameSpeed = 5.0;
+      obstacles.clear();
+
+      gameTimer?.cancel();
+      gameTimer = Timer.periodic(
+          const Duration(milliseconds: 16),
+              (timer) => updateGame()
+      );
+    });
+  }
+
+  void startAnimation() {
+    animationTimer?.cancel();
+    animationTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+          (timer) {
+        if (!isGameOver && !isJumping) {
+          setState(() {
+            currentFrame = (currentFrame + 1) % 2; // Only using 2 frames for now
+          });
+        }
+      },
     );
-
-    _marioAnimation = Tween<double>(
-      begin: 0,
-      end: -100,
-    ).animate(CurvedAnimation(
-      parent: _marioAnimationController,
-      curve: Curves.decelerate,
-    ));
-
-    _marioAnimation.addListener(() {
-      setState(() {
-        marioYPosition = _marioAnimation.value;
-      });
-    });
-  }
-
-  void startGame() {
-    obstacles.clear();
-    score = 0;
-    isGameOver = false;
-    gameSpeed = 5.0;
-
-    gameTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
-      updateGame();
-    });
   }
 
   void jump() {
     if (!isJumping && !isGameOver) {
-      isJumping = true;
-      _marioAnimationController.forward().then((_) {
-        _marioAnimationController.reverse();
-        isJumping = false;
+      setState(() {
+        isJumping = true;
+        verticalVelocity = jumpForce;
       });
     }
   }
@@ -77,6 +100,17 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     if (isGameOver) return;
 
     setState(() {
+      // Update Mario's position
+      verticalVelocity += gravity;
+      marioY += verticalVelocity;
+
+      // Ground collision
+      if (marioY >= 0) {
+        marioY = 0;
+        verticalVelocity = 0;
+        isJumping = false;
+      }
+
       // Update obstacles
       for (var obstacle in obstacles) {
         obstacle.x -= gameSpeed;
@@ -86,13 +120,17 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       obstacles.removeWhere((obstacle) => obstacle.x < -50);
 
       // Add new obstacles
-      if (obstacles.isEmpty || obstacles.last.x < 200) {
-        obstacles.add(GameObject(
-          x: MediaQuery.of(context).size.width,
-          y: 0,
-          width: 30,
-          height: 50,
-        ));
+      if (obstacles.isEmpty ||
+          obstacles.last.x < MediaQuery.of(context).size.width - 300) {
+        obstacles.add(
+          GameObject(
+            x: MediaQuery.of(context).size.width,
+            y: 0,
+            width: 40,
+            height: 70,
+            type: 'basic',
+          ),
+        );
       }
 
       // Check collisions
@@ -106,7 +144,7 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       // Update score
       score++;
 
-      // Increase game speed
+      // Increase speed
       if (score % 500 == 0) {
         gameSpeed += 0.5;
       }
@@ -114,14 +152,30 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   bool checkCollision(GameObject obstacle) {
-    return (marioXPosition < obstacle.x + obstacle.width &&
-        marioXPosition + 50 > obstacle.x &&
-        marioYPosition > -30);
+    final marioRect = Rect.fromLTWH(
+      marioX,
+      groundHeight + marioY,
+      marioSize * 0.8, // Smaller collision box
+      marioSize * 0.8,
+    );
+
+    final obstacleRect = Rect.fromLTWH(
+      obstacle.x,
+      groundHeight,
+      obstacle.width * 0.8,
+      obstacle.height,
+    );
+
+    return marioRect.overlaps(obstacleRect);
   }
 
   void gameOver() {
-    isGameOver = true;
+    setState(() {
+      isGameOver = true;
+    });
     gameTimer?.cancel();
+    animationTimer?.cancel();
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -129,7 +183,8 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         score: score,
         onRestart: () {
           Navigator.of(context).pop();
-          startGame();
+          setupGame();
+          startAnimation();
         },
       ),
     );
@@ -140,223 +195,87 @@ class GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: GestureDetector(
         onTapDown: (_) => jump(),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.lightBlue.shade300,
-                Colors.lightBlue.shade100,
-              ],
-              stops: const [0.0, 0.7],
-            ),
-          ),
-          child: Stack(
-            children: [
-              // Clouds (Parallax Background)
-              _buildClouds(),
-
-              // Mountains (Background)
-              _buildMountains(),
-
-              // Ground
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _buildGround(),
-              ),
-
-              // Mario Character
-              Positioned(
-                left: marioXPosition,
-                bottom: 100 + marioYPosition,
-                child: _buildMario(),
-              ),
-
-              // Obstacles
-              ...obstacles.map((obstacle) => Positioned(
-                left: obstacle.x,
-                bottom: 100,
-                child: _buildObstacle(obstacle),
-              )),
-
-              // Score Display
-              ScoreDisplay(score: score),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClouds() {
-    return Positioned(
-      top: 50,
-      left: 0,
-      right: 0,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(
-          3,
-              (index) => Container(
-            width: 80,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+        child: Stack(
+          children: [
+            // Background
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.lightBlue.shade300,
+                    Colors.lightBlue.shade100,
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildMountains() {
-    return Positioned(
-      bottom: 100,
-      left: 0,
-      right: 0,
-      child: CustomPaint(
-        size: const Size(double.infinity, 100),
-        painter: MountainPainter(),
-      ),
-    );
-  }
+            // Ground
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: groundHeight,
+                decoration: BoxDecoration(
+                  color: Colors.brown[200],
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.brown.shade600,
+                      width: 3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
-  Widget _buildGround() {
-    return Container(
-      height: 100,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.brown.shade400,
-            Colors.brown.shade700,
-          ],
-        ),
-        border: Border(
-          top: BorderSide(
-            color: Colors.brown.shade600,
-            width: 3,
-          ),
-        ),
-      ),
-      child: CustomPaint(
-        size: const Size(double.infinity, 100),
-        painter: GroundPatternPainter(),
-      ),
-    );
-  }
+            // Mario
+            Positioned(
+              left: marioX,
+              bottom: groundHeight + marioY,
+              child: getMarioSprite(),
+            ),
 
-  Widget _buildMario() {
-    return Container(
-      width: 50,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.red,
-        borderRadius: BorderRadius.circular(5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 5,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.red, Color(0xFFCC0000)],
-        ),
-      ),
-    );
-  }
+            // Obstacles
+            ...obstacles.map((obstacle) => Positioned(
+              left: obstacle.x,
+              bottom: groundHeight,
+              child: getObstacleSprite(obstacle),
+            )),
 
-  Widget _buildObstacle(GameObject obstacle) {
-    return Container(
-      width: obstacle.width,
-      height: obstacle.height,
-      decoration: BoxDecoration(
-        color: Colors.green.shade800,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(5),
-          topRight: Radius.circular(5),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 5,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.green.shade400,
-            Colors.green.shade800,
+            // Score
+            ScoreDisplay(score: score),
+
+            // Start message
+            if (!isGameOver && score == 0)
+              const Center(
+                child: Text(
+                  'Tap to Jump!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black,
+                        blurRadius: 4,
+                        offset: Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
-}
 
-// Custom Painter for Mountains
-class MountainPainter extends CustomPainter {
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey.shade600
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, size.height);
-
-    // First mountain
-    path.lineTo(size.width * 0.3, 0);
-    path.lineTo(size.width * 0.6, size.height);
-
-    // Second mountain
-    path.lineTo(size.width * 0.8, size.height * 0.3);
-    path.lineTo(size.width, size.height);
-
-    path.close();
-    canvas.drawPath(path, paint);
+  void dispose() {
+    gameTimer?.cancel();
+    animationTimer?.cancel();
+    super.dispose();
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// Custom Painter for Ground Pattern
-class GroundPatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.brown.shade300.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    for (var i = 0; i < size.width; i += 20) {
-      canvas.drawLine(
-        Offset(i.toDouble(), 0),
-        Offset(i.toDouble(), size.height),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-
 }
